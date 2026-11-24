@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>문자 열기</title>
+<style>
+  :root { --bg: #f5f5f7; --card: #fff; --text: #1d1d1f; --muted: #86868b; --line: #e3e3e8; --accent: #0a7cff; --accent-text: #fff; --danger: #d70015; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #000; --card: #1c1c1e; --text: #f5f5f7; --muted: #98989d; --line: #2c2c2e; --accent: #0a84ff; --accent-text: #fff; --danger: #ff453a; }
+  }
+  :root[data-theme="dark"] { --bg: #000; --card: #1c1c1e; --text: #f5f5f7; --muted: #98989d; --line: #2c2c2e; --accent: #0a84ff; --accent-text: #fff; --danger: #ff453a; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.5 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+  main { max-width: 520px; margin: 0 auto; padding: 24px 16px 40px; }
+  h1 { font-size: 20px; margin: 0 0 14px; }
+  .to { color: var(--muted); font-size: 15px; margin-bottom: 8px; }
+  .msg { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; white-space: pre-wrap; word-break: break-all; }
+  a.btn, button { display: block; width: 100%; text-align: center; margin-top: 14px; padding: 15px; border-radius: 12px;
+    font: inherit; font-weight: 600; text-decoration: none; border: 0; cursor: pointer; }
+  a.btn { background: var(--accent); color: var(--accent-text); }
+  button { background: var(--card); color: var(--text); border: 1px solid var(--line); }
+  .err { color: var(--danger); }
+  .hint { color: var(--muted); font-size: 14px; margin-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>안내문자</h1>
+  <div id="box"><p class="hint">불러오는 중…</p></div>
+</main>
+<script>
+// 번호·내용은 주소의 # 뒷부분에만 있고, 이 부분은 서버로 전송되지 않습니다.
+(async function () {
+  const box = document.getElementById('box');
+  const fail = t => { box.innerHTML = '<p class="err"></p>'; box.firstChild.textContent = t; };
+  try {
+    const p = new URLSearchParams(location.hash.slice(1));
+    const z = p.get('z');
+    if (!z) return fail('링크에 문자 내용이 없습니다. 디스코드의 링크를 다시 눌러 주세요.');
+    if (typeof DecompressionStream === 'undefined') return fail('이 기기의 브라우저가 너무 오래됐습니다. iOS를 업데이트해 주세요.');
+    const b64 = z.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((z.length + 3) % 4);
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+    const data = JSON.parse(await new Response(stream).text());
+    const to = String(data.t || '').replace(/[^0-9+]/g, '');
+    const body = String(data.b || '');
+    if (!to) return fail('받는 사람 번호가 없습니다.');
+    const ios = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent) && 'ontouchend' in document;
+    const sms = 'sms:' + to + (ios ? '&' : '?') + 'body=' + encodeURIComponent(body);
+    const pretty = to.length === 11 ? to.replace(/(\d{3})(\d{4})(\d{4})/, '$1-$2-$3') : to;
+    box.innerHTML = '<div class="to"></div><div class="msg"></div>' +
+      '<a class="btn" id="open">메시지 앱 열기</a><button id="copy">문자 내용 복사</button>' +
+      '<p class="hint">메시지 앱이 자동으로 안 열리면 위 버튼을 누르세요. 열린 뒤 전송 버튼을 누르면 보내집니다.</p>';
+    box.querySelector('.to').textContent = '받는 사람: ' + pretty;
+    box.querySelector('.msg').textContent = body;
+    box.querySelector('#open').href = sms;
+    box.querySelector('#copy').onclick = async e => {
+      try { await navigator.clipboard.writeText(body); e.target.textContent = '복사했습니다'; }
+      catch (err) { e.target.textContent = '복사하지 못했습니다'; }
+    };
+    setTimeout(() => { location.href = sms; }, 400);
+  } catch (e) {
+    fail('링크를 읽지 못했습니다. 링크가 잘리지 않았는지 확인해 주세요.');
+  }
+})();
+</script>
+</body>
+</html>
